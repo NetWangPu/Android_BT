@@ -2,9 +2,3 @@
 plugins {
     alias(libs.plugins.android.application) apply false
 }
-
-allprojects {
-    repositories {
-        maven { url 'https://jitpack.io' }
-    }
-}
