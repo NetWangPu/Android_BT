@@ -9,12 +9,16 @@ import android.util.Log;
 
 import com.wp.bt.model.SensorData;
 
+import org.json.JSONException;
+import org.json.JSONObject;
+
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.List;
 
 /**
- * SQLite数据库帮助类
- * 负责传感器数据的存储和查询
+ * SQLite数据库帮助类 - 通用版本
+ * 使用JSON字符串存储动态传感器数据
  */
 public class DatabaseHelper extends SQLiteOpenHelper {
     
@@ -22,44 +26,22 @@ public class DatabaseHelper extends SQLiteOpenHelper {
     
     // 数据库信息
     private static final String DATABASE_NAME = "bt_sensor.db";
-    private static final int DATABASE_VERSION = 1;
+    private static final int DATABASE_VERSION = 2; // 版本升级
     
     // 表名
     private static final String TABLE_SENSOR_DATA = "sensor_data";
     
-    // 列名
+    // 列名 - 简化为只存储时间戳和原始JSON
     private static final String COLUMN_ID = "id";
     private static final String COLUMN_TIMESTAMP = "timestamp";
-    private static final String COLUMN_TEMPERATURE = "temperature";
-    private static final String COLUMN_TEMP_UNIT = "temp_unit";
-    private static final String COLUMN_HUMIDITY = "humidity";
-    private static final String COLUMN_HUM_UNIT = "hum_unit";
-    private static final String COLUMN_LIGHT = "light";
-    private static final String COLUMN_LIGHT_UNIT = "light_unit";
-    private static final String COLUMN_WATER = "water";
-    private static final String COLUMN_WATER_UNIT = "water_unit";
-    private static final String COLUMN_CO2 = "co2";
-    private static final String COLUMN_CO2_UNIT = "co2_unit";
-    private static final String COLUMN_PH = "ph";
-    private static final String COLUMN_PH_UNIT = "ph_unit";
+    private static final String COLUMN_RAW_JSON = "raw_json";
     
     // 创建表SQL
     private static final String CREATE_TABLE_SENSOR_DATA = 
             "CREATE TABLE " + TABLE_SENSOR_DATA + " (" +
             COLUMN_ID + " INTEGER PRIMARY KEY AUTOINCREMENT, " +
             COLUMN_TIMESTAMP + " INTEGER NOT NULL, " +
-            COLUMN_TEMPERATURE + " REAL, " +
-            COLUMN_TEMP_UNIT + " TEXT, " +
-            COLUMN_HUMIDITY + " REAL, " +
-            COLUMN_HUM_UNIT + " TEXT, " +
-            COLUMN_LIGHT + " REAL, " +
-            COLUMN_LIGHT_UNIT + " TEXT, " +
-            COLUMN_WATER + " REAL, " +
-            COLUMN_WATER_UNIT + " TEXT, " +
-            COLUMN_CO2 + " REAL, " +
-            COLUMN_CO2_UNIT + " TEXT, " +
-            COLUMN_PH + " REAL, " +
-            COLUMN_PH_UNIT + " TEXT" +
+            COLUMN_RAW_JSON + " TEXT" +
             ")";
     
     // 单例模式
@@ -84,7 +66,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
     
     @Override
     public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) {
-        // 简单处理：删除旧表，创建新表
+        // 删除旧表，创建新表
         db.execSQL("DROP TABLE IF EXISTS " + TABLE_SENSOR_DATA);
         onCreate(db);
     }
@@ -97,18 +79,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         
         ContentValues values = new ContentValues();
         values.put(COLUMN_TIMESTAMP, data.getTimestamp());
-        values.put(COLUMN_TEMPERATURE, data.getTemperature());
-        values.put(COLUMN_TEMP_UNIT, data.getTempUnit());
-        values.put(COLUMN_HUMIDITY, data.getHumidity());
-        values.put(COLUMN_HUM_UNIT, data.getHumUnit());
-        values.put(COLUMN_LIGHT, data.getLight());
-        values.put(COLUMN_LIGHT_UNIT, data.getLightUnit());
-        values.put(COLUMN_WATER, data.getWater());
-        values.put(COLUMN_WATER_UNIT, data.getWaterUnit());
-        values.put(COLUMN_CO2, data.getCo2());
-        values.put(COLUMN_CO2_UNIT, data.getCo2Unit());
-        values.put(COLUMN_PH, data.getPh());
-        values.put(COLUMN_PH_UNIT, data.getPhUnit());
+        values.put(COLUMN_RAW_JSON, data.getRawJson());
         
         long id = db.insert(TABLE_SENSOR_DATA, null, values);
         Log.d(TAG, "插入数据成功, ID: " + id);
@@ -130,7 +101,9 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         if (cursor.moveToFirst()) {
             do {
                 SensorData data = cursorToSensorData(cursor);
-                dataList.add(data);
+                if (data != null) {
+                    dataList.add(data);
+                }
             } while (cursor.moveToNext());
         }
         
@@ -157,7 +130,9 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         if (cursor.moveToFirst()) {
             do {
                 SensorData data = cursorToSensorData(cursor);
-                dataList.add(data);
+                if (data != null) {
+                    dataList.add(data);
+                }
             } while (cursor.moveToNext());
         }
         
@@ -180,7 +155,9 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         if (cursor.moveToFirst()) {
             do {
                 SensorData data = cursorToSensorData(cursor);
-                dataList.add(data);
+                if (data != null) {
+                    dataList.add(data);
+                }
             } while (cursor.moveToNext());
         }
         
@@ -200,7 +177,6 @@ public class DatabaseHelper extends SQLiteOpenHelper {
      */
     public List<SensorData> getTodaySensorData() {
         long now = System.currentTimeMillis();
-        // 获取今天0点的时间戳
         long todayStart = now - (now % (24 * 60 * 60 * 1000));
         return getSensorDataByTimeRange(todayStart, now);
     }
@@ -248,25 +224,44 @@ public class DatabaseHelper extends SQLiteOpenHelper {
     
     /**
      * 将Cursor转换为SensorData对象
+     * 从JSON字符串重建动态数据
      */
     private SensorData cursorToSensorData(Cursor cursor) {
-        SensorData data = new SensorData();
-        
-        data.setId(cursor.getLong(cursor.getColumnIndexOrThrow(COLUMN_ID)));
-        data.setTimestamp(cursor.getLong(cursor.getColumnIndexOrThrow(COLUMN_TIMESTAMP)));
-        data.setTemperature(cursor.getFloat(cursor.getColumnIndexOrThrow(COLUMN_TEMPERATURE)));
-        data.setTempUnit(cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_TEMP_UNIT)));
-        data.setHumidity(cursor.getFloat(cursor.getColumnIndexOrThrow(COLUMN_HUMIDITY)));
-        data.setHumUnit(cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_HUM_UNIT)));
-        data.setLight(cursor.getFloat(cursor.getColumnIndexOrThrow(COLUMN_LIGHT)));
-        data.setLightUnit(cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_LIGHT_UNIT)));
-        data.setWater(cursor.getFloat(cursor.getColumnIndexOrThrow(COLUMN_WATER)));
-        data.setWaterUnit(cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_WATER_UNIT)));
-        data.setCo2(cursor.getFloat(cursor.getColumnIndexOrThrow(COLUMN_CO2)));
-        data.setCo2Unit(cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_CO2_UNIT)));
-        data.setPh(cursor.getFloat(cursor.getColumnIndexOrThrow(COLUMN_PH)));
-        data.setPhUnit(cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_PH_UNIT)));
-        
-        return data;
+        try {
+            SensorData data = new SensorData();
+            
+            data.setId(cursor.getLong(cursor.getColumnIndexOrThrow(COLUMN_ID)));
+            data.setTimestamp(cursor.getLong(cursor.getColumnIndexOrThrow(COLUMN_TIMESTAMP)));
+            
+            String rawJson = cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_RAW_JSON));
+            data.setRawJson(rawJson);
+            
+            // 从JSON重建数据项
+            if (rawJson != null && !rawJson.isEmpty()) {
+                JSONObject json = new JSONObject(rawJson);
+                if (json.has("Date")) {
+                    JSONObject dateObj = json.getJSONObject("Date");
+                    Iterator<String> keys = dateObj.keys();
+                    while (keys.hasNext()) {
+                        String key = keys.next();
+                        Object valueObj = dateObj.get(key);
+                        
+                        if (valueObj instanceof JSONObject) {
+                            JSONObject itemObj = (JSONObject) valueObj;
+                            String value = String.valueOf(itemObj.opt("val"));
+                            String unit = itemObj.optString("unit", "");
+                            data.addItem(key, value, unit);
+                        } else {
+                            data.addItem(key, String.valueOf(valueObj), "");
+                        }
+                    }
+                }
+            }
+            
+            return data;
+        } catch (JSONException e) {
+            Log.e(TAG, "解析数据库JSON失败", e);
+            return null;
+        }
     }
 }

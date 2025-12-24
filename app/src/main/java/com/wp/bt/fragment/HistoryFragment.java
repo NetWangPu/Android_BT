@@ -7,6 +7,8 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
+import android.widget.HorizontalScrollView;
+import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -34,12 +36,14 @@ import com.wp.bt.model.SensorData;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 
 /**
- * 历史记录Fragment
- * 显示历史数据列表和曲线图
+ * 历史记录Fragment - 通用版本
+ * 动态显示任意数量和名称的传感器数据图表
  */
 public class HistoryFragment extends Fragment {
     
@@ -58,26 +62,27 @@ public class HistoryFragment extends Fragment {
     
     // 按钮
     private Button btnRefresh, btnClearAll;
-    private Button btnShowTemp, btnShowHum, btnShowLight, btnShowWater, btnShowCo2, btnShowPh, btnShowAll;
+    private LinearLayout layoutFilterButtons;
     
-    // 当前显示的数据类型
-    private int currentDataType = DATA_TYPE_ALL;
+    // 当前选中的数据键名 (null表示显示全部)
+    private String currentSelectedKey = null;
     
-    private static final int DATA_TYPE_ALL = 0;
-    private static final int DATA_TYPE_TEMP = 1;
-    private static final int DATA_TYPE_HUM = 2;
-    private static final int DATA_TYPE_LIGHT = 3;
-    private static final int DATA_TYPE_WATER = 4;
-    private static final int DATA_TYPE_CO2 = 5;
-    private static final int DATA_TYPE_PH = 6;
+    // 图表颜色数组
+    private static final int[] CHART_COLORS = {
+            Color.parseColor("#FF5722"),
+            Color.parseColor("#2196F3"),
+            Color.parseColor("#FFC107"),
+            Color.parseColor("#00BCD4"),
+            Color.parseColor("#9C27B0"),
+            Color.parseColor("#4CAF50"),
+            Color.parseColor("#E91E63"),
+            Color.parseColor("#3F51B5"),
+            Color.parseColor("#009688"),
+            Color.parseColor("#795548"),
+    };
     
-    // 图表颜色
-    private static final int COLOR_TEMP = Color.parseColor("#FF5722");
-    private static final int COLOR_HUM = Color.parseColor("#2196F3");
-    private static final int COLOR_LIGHT = Color.parseColor("#FFC107");
-    private static final int COLOR_WATER = Color.parseColor("#00BCD4");
-    private static final int COLOR_CO2 = Color.parseColor("#9C27B0");
-    private static final int COLOR_PH = Color.parseColor("#4CAF50");
+    // 已知的数据键名集合
+    private Set<String> knownKeys = new HashSet<>();
     
     @Nullable
     @Override
@@ -116,21 +121,13 @@ public class HistoryFragment extends Fragment {
         
         btnRefresh = view.findViewById(R.id.btn_refresh);
         btnClearAll = view.findViewById(R.id.btn_clear_all);
-        
-        btnShowTemp = view.findViewById(R.id.btn_show_temp);
-        btnShowHum = view.findViewById(R.id.btn_show_hum);
-        btnShowLight = view.findViewById(R.id.btn_show_light);
-        btnShowWater = view.findViewById(R.id.btn_show_water);
-        btnShowCo2 = view.findViewById(R.id.btn_show_co2);
-        btnShowPh = view.findViewById(R.id.btn_show_ph);
-        btnShowAll = view.findViewById(R.id.btn_show_all);
+        layoutFilterButtons = view.findViewById(R.id.layout_filter_buttons);
     }
     
     /**
      * 设置图表
      */
     private void setupChart() {
-        // 基本设置
         lineChart.setTouchEnabled(true);
         lineChart.setDragEnabled(true);
         lineChart.setScaleEnabled(true);
@@ -138,13 +135,11 @@ public class HistoryFragment extends Fragment {
         lineChart.setDrawGridBackground(false);
         lineChart.setBackgroundColor(Color.WHITE);
         
-        // 描述
         Description description = new Description();
         description.setText("传感器数据曲线");
         description.setTextSize(12f);
         lineChart.setDescription(description);
         
-        // X轴设置
         XAxis xAxis = lineChart.getXAxis();
         xAxis.setPosition(XAxis.XAxisPosition.BOTTOM);
         xAxis.setDrawGridLines(true);
@@ -157,15 +152,12 @@ public class HistoryFragment extends Fragment {
             }
         });
         
-        // 左Y轴设置
         YAxis leftAxis = lineChart.getAxisLeft();
         leftAxis.setDrawGridLines(true);
         
-        // 右Y轴设置
         YAxis rightAxis = lineChart.getAxisRight();
         rightAxis.setEnabled(false);
         
-        // 图例设置
         Legend legend = lineChart.getLegend();
         legend.setForm(Legend.LegendForm.LINE);
         legend.setTextSize(11f);
@@ -202,43 +194,62 @@ public class HistoryFragment extends Fragment {
      */
     private void setupButtons() {
         btnRefresh.setOnClickListener(v -> loadData());
-        
         btnClearAll.setOnClickListener(v -> showClearAllDialog());
+    }
+    
+    /**
+     * 动态创建筛选按钮
+     */
+    private void updateFilterButtons(List<SensorData> dataList) {
+        // 收集所有数据键名
+        Set<String> allKeys = new HashSet<>();
+        for (SensorData data : dataList) {
+            allKeys.addAll(data.getKeys());
+        }
         
-        btnShowTemp.setOnClickListener(v -> {
-            currentDataType = DATA_TYPE_TEMP;
-            updateChart();
+        // 如果键名没有变化，不需要重建按钮
+        if (allKeys.equals(knownKeys)) {
+            return;
+        }
+        knownKeys = allKeys;
+        
+        // 清空现有按钮
+        layoutFilterButtons.removeAllViews();
+        
+        // 添加"全部"按钮
+        Button btnAll = createFilterButton("全部", null);
+        layoutFilterButtons.addView(btnAll);
+        
+        // 为每个键名创建按钮
+        for (String key : allKeys) {
+            Button btn = createFilterButton(key, key);
+            layoutFilterButtons.addView(btn);
+        }
+    }
+    
+    /**
+     * 创建筛选按钮
+     */
+    private Button createFilterButton(String text, String key) {
+        Button btn = new Button(requireContext(), null, 
+                com.google.android.material.R.attr.materialButtonOutlinedStyle);
+        btn.setText(text);
+        btn.setTextSize(12);
+        
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                dpToPx(36)
+        );
+        params.setMargins(0, 0, dpToPx(4), 0);
+        btn.setLayoutParams(params);
+        btn.setPadding(dpToPx(12), 0, dpToPx(12), 0);
+        
+        btn.setOnClickListener(v -> {
+            currentSelectedKey = key;
+            loadData();
         });
         
-        btnShowHum.setOnClickListener(v -> {
-            currentDataType = DATA_TYPE_HUM;
-            updateChart();
-        });
-        
-        btnShowLight.setOnClickListener(v -> {
-            currentDataType = DATA_TYPE_LIGHT;
-            updateChart();
-        });
-        
-        btnShowWater.setOnClickListener(v -> {
-            currentDataType = DATA_TYPE_WATER;
-            updateChart();
-        });
-        
-        btnShowCo2.setOnClickListener(v -> {
-            currentDataType = DATA_TYPE_CO2;
-            updateChart();
-        });
-        
-        btnShowPh.setOnClickListener(v -> {
-            currentDataType = DATA_TYPE_PH;
-            updateChart();
-        });
-        
-        btnShowAll.setOnClickListener(v -> {
-            currentDataType = DATA_TYPE_ALL;
-            updateChart();
-        });
+        return btn;
     }
     
     /**
@@ -253,6 +264,7 @@ public class HistoryFragment extends Fragment {
                 getActivity().runOnUiThread(() -> {
                     historyAdapter.setDataList(dataList);
                     tvDataCount.setText("共 " + totalCount + " 条记录");
+                    updateFilterButtons(dataList);
                     updateChartWithData(dataList);
                 });
             }
@@ -260,19 +272,7 @@ public class HistoryFragment extends Fragment {
     }
     
     /**
-     * 更新图表
-     */
-    private void updateChart() {
-        new Thread(() -> {
-            List<SensorData> dataList = databaseHelper.getRecentSensorData(100);
-            if (getActivity() != null) {
-                getActivity().runOnUiThread(() -> updateChartWithData(dataList));
-            }
-        }).start();
-    }
-    
-    /**
-     * 使用数据更新图表
+     * 使用数据更新图表 - 动态版本
      */
     private void updateChartWithData(List<SensorData> dataList) {
         if (dataList == null || dataList.isEmpty()) {
@@ -281,101 +281,77 @@ public class HistoryFragment extends Fragment {
             return;
         }
         
-        List<ILineDataSet> dataSets = new ArrayList<>();
-        
-        if (currentDataType == DATA_TYPE_ALL || currentDataType == DATA_TYPE_TEMP) {
-            dataSets.add(createLineDataSet(dataList, "温度", COLOR_TEMP, 
-                    data -> data.getTemperature()));
-        }
-        
-        if (currentDataType == DATA_TYPE_ALL || currentDataType == DATA_TYPE_HUM) {
-            dataSets.add(createLineDataSet(dataList, "湿度", COLOR_HUM, 
-                    data -> data.getHumidity()));
-        }
-        
-        if (currentDataType == DATA_TYPE_ALL || currentDataType == DATA_TYPE_LIGHT) {
-            dataSets.add(createLineDataSet(dataList, "光照", COLOR_LIGHT, 
-                    data -> data.getLight()));
-        }
-        
-        if (currentDataType == DATA_TYPE_ALL || currentDataType == DATA_TYPE_WATER) {
-            dataSets.add(createLineDataSet(dataList, "水分", COLOR_WATER, 
-                    data -> data.getWater()));
-        }
-        
-        if (currentDataType == DATA_TYPE_ALL || currentDataType == DATA_TYPE_CO2) {
-            // CO2数据需要归一化显示
-            dataSets.add(createLineDataSet(dataList, "CO2/10", COLOR_CO2, 
-                    data -> data.getCo2() / 10f));
-        }
-        
-        if (currentDataType == DATA_TYPE_ALL || currentDataType == DATA_TYPE_PH) {
-            dataSets.add(createLineDataSet(dataList, "PH", COLOR_PH, 
-                    data -> data.getPh()));
-        }
-        
-        LineData lineData = new LineData(dataSets);
-        lineChart.setData(lineData);
-        lineChart.invalidate();
-        lineChart.animateX(500);
-    }
-    
-    /**
-     * 创建线条数据集
-     */
-    private LineDataSet createLineDataSet(List<SensorData> dataList, String label, int color, 
-                                          ValueExtractor extractor) {
-        List<Entry> entries = new ArrayList<>();
-        
+        // 收集所有数据键名
+        Set<String> allKeys = new HashSet<>();
         for (SensorData data : dataList) {
-            entries.add(new Entry(data.getTimestamp(), extractor.extract(data)));
+            allKeys.addAll(data.getKeys());
         }
         
-        LineDataSet dataSet = new LineDataSet(entries, label);
-        dataSet.setColor(color);
-        dataSet.setCircleColor(color);
-        dataSet.setLineWidth(2f);
-        dataSet.setCircleRadius(3f);
-        dataSet.setDrawCircleHole(false);
-        dataSet.setValueTextSize(9f);
-        dataSet.setDrawValues(false);
-        dataSet.setMode(LineDataSet.Mode.CUBIC_BEZIER);
-        dataSet.setCubicIntensity(0.2f);
+        List<ILineDataSet> dataSets = new ArrayList<>();
+        int colorIndex = 0;
         
-        return dataSet;
+        for (String key : allKeys) {
+            // 如果选择了特定键，只显示该键的数据
+            if (currentSelectedKey != null && !currentSelectedKey.equals(key)) {
+                continue;
+            }
+            
+            List<Entry> entries = new ArrayList<>();
+            
+            for (SensorData data : dataList) {
+                SensorData.SensorItem item = data.getItem(key);
+                if (item != null) {
+                    float value = item.getFloatValue();
+                    entries.add(new Entry(data.getTimestamp(), value));
+                }
+            }
+            
+            if (!entries.isEmpty()) {
+                LineDataSet dataSet = new LineDataSet(entries, key);
+                int color = CHART_COLORS[colorIndex % CHART_COLORS.length];
+                dataSet.setColor(color);
+                dataSet.setCircleColor(color);
+                dataSet.setLineWidth(2f);
+                dataSet.setCircleRadius(3f);
+                dataSet.setDrawCircleHole(false);
+                dataSet.setValueTextSize(9f);
+                dataSet.setDrawValues(false);
+                dataSet.setMode(LineDataSet.Mode.CUBIC_BEZIER);
+                dataSet.setCubicIntensity(0.2f);
+                
+                dataSets.add(dataSet);
+                colorIndex++;
+            }
+        }
+        
+        if (dataSets.isEmpty()) {
+            lineChart.clear();
+        } else {
+            LineData lineData = new LineData(dataSets);
+            lineChart.setData(lineData);
+            lineChart.animateX(500);
+        }
+        lineChart.invalidate();
     }
     
     /**
-     * 值提取器接口
-     */
-    private interface ValueExtractor {
-        float extract(SensorData data);
-    }
-    
-    /**
-     * 显示数据详情
+     * 显示数据详情 - 动态版本
      */
     private void showDataDetail(SensorData data) {
         SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault());
-        String message = String.format(Locale.getDefault(),
-                "时间: %s\n\n" +
-                "温度: %.1f %s\n" +
-                "湿度: %.1f %s\n" +
-                "光照: %.1f %s\n" +
-                "水分: %.1f %s\n" +
-                "CO2: %.0f %s\n" +
-                "PH: %.1f %s",
-                sdf.format(new Date(data.getTimestamp())),
-                data.getTemperature(), data.getTempUnit() != null ? data.getTempUnit() : "°C",
-                data.getHumidity(), data.getHumUnit() != null ? data.getHumUnit() : "%",
-                data.getLight(), data.getLightUnit() != null ? data.getLightUnit() : "%",
-                data.getWater(), data.getWaterUnit() != null ? data.getWaterUnit() : "%",
-                data.getCo2(), data.getCo2Unit() != null ? data.getCo2Unit() : "ppm",
-                data.getPh(), data.getPhUnit() != null ? data.getPhUnit() : "");
+        StringBuilder sb = new StringBuilder();
+        sb.append("时间: ").append(sdf.format(new Date(data.getTimestamp()))).append("\n\n");
+        
+        for (SensorData.SensorItem item : data.getItemList()) {
+            sb.append(item.getKey()).append(": ")
+              .append(item.getValue())
+              .append(item.getUnit().isEmpty() ? "" : " " + item.getUnit())
+              .append("\n");
+        }
         
         new AlertDialog.Builder(requireContext())
                 .setTitle("数据详情")
-                .setMessage(message)
+                .setMessage(sb.toString())
                 .setPositiveButton("确定", null)
                 .show();
     }
@@ -419,6 +395,8 @@ public class HistoryFragment extends Fragment {
                                 lineChart.clear();
                                 lineChart.invalidate();
                                 tvDataCount.setText("共 0 条记录");
+                                knownKeys.clear();
+                                layoutFilterButtons.removeAllViews();
                                 Toast.makeText(getContext(), "已清空所有记录", Toast.LENGTH_SHORT).show();
                             });
                         }
@@ -438,5 +416,9 @@ public class HistoryFragment extends Fragment {
                 loadData();
             });
         }
+    }
+    
+    private int dpToPx(int dp) {
+        return (int) (dp * getResources().getDisplayMetrics().density);
     }
 }

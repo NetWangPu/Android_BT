@@ -1,8 +1,12 @@
 package com.wp.bt.adapter;
 
+import android.graphics.Color;
+import android.util.TypedValue;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.GridLayout;
+import android.widget.LinearLayout;
 import android.widget.TextView;
 
 import androidx.annotation.NonNull;
@@ -18,14 +22,28 @@ import java.util.List;
 import java.util.Locale;
 
 /**
- * 历史记录适配器
- * 用于显示历史传感器数据列表
+ * 历史记录适配器 - 通用版本
+ * 动态显示任意数量和名称的传感器数据
  */
 public class HistoryAdapter extends RecyclerView.Adapter<HistoryAdapter.ViewHolder> {
     
     private List<SensorData> dataList;
     private SimpleDateFormat dateFormat;
     private OnItemClickListener listener;
+    
+    // 颜色数组
+    private static final int[] SENSOR_COLORS = {
+            Color.parseColor("#FF5722"),
+            Color.parseColor("#2196F3"),
+            Color.parseColor("#FFC107"),
+            Color.parseColor("#00BCD4"),
+            Color.parseColor("#9C27B0"),
+            Color.parseColor("#4CAF50"),
+            Color.parseColor("#E91E63"),
+            Color.parseColor("#3F51B5"),
+            Color.parseColor("#009688"),
+            Color.parseColor("#795548"),
+    };
     
     /**
      * 点击监听器
@@ -95,22 +113,12 @@ public class HistoryAdapter extends RecyclerView.Adapter<HistoryAdapter.ViewHold
     class ViewHolder extends RecyclerView.ViewHolder {
         
         private TextView tvTime;
-        private TextView tvTemp;
-        private TextView tvHum;
-        private TextView tvLight;
-        private TextView tvWater;
-        private TextView tvCo2;
-        private TextView tvPh;
+        private GridLayout gridData;
         
         public ViewHolder(@NonNull View itemView) {
             super(itemView);
             tvTime = itemView.findViewById(R.id.tv_history_time);
-            tvTemp = itemView.findViewById(R.id.tv_history_temp);
-            tvHum = itemView.findViewById(R.id.tv_history_hum);
-            tvLight = itemView.findViewById(R.id.tv_history_light);
-            tvWater = itemView.findViewById(R.id.tv_history_water);
-            tvCo2 = itemView.findViewById(R.id.tv_history_co2);
-            tvPh = itemView.findViewById(R.id.tv_history_ph);
+            gridData = itemView.findViewById(R.id.grid_history_data);
         }
         
         public void bind(SensorData data, int position) {
@@ -118,34 +126,77 @@ public class HistoryAdapter extends RecyclerView.Adapter<HistoryAdapter.ViewHold
             String timeStr = dateFormat.format(new Date(data.getTimestamp()));
             tvTime.setText(timeStr);
             
-            // 设置各项数据
-            tvTemp.setText(String.format(Locale.getDefault(), "%.1f%s", 
-                    data.getTemperature(), data.getTempUnit() != null ? data.getTempUnit() : "°C"));
-            tvHum.setText(String.format(Locale.getDefault(), "%.1f%s", 
-                    data.getHumidity(), data.getHumUnit() != null ? data.getHumUnit() : "%"));
-            tvLight.setText(String.format(Locale.getDefault(), "%.1f%s", 
-                    data.getLight(), data.getLightUnit() != null ? data.getLightUnit() : "%"));
-            tvWater.setText(String.format(Locale.getDefault(), "%.1f%s", 
-                    data.getWater(), data.getWaterUnit() != null ? data.getWaterUnit() : "%"));
-            tvCo2.setText(String.format(Locale.getDefault(), "%.0f%s", 
-                    data.getCo2(), data.getCo2Unit() != null ? data.getCo2Unit() : "ppm"));
-            tvPh.setText(String.format(Locale.getDefault(), "%.1f%s", 
-                    data.getPh(), data.getPhUnit() != null ? data.getPhUnit() : ""));
+            // 清空并动态添加数据项
+            gridData.removeAllViews();
+            
+            List<SensorData.SensorItem> items = data.getItemList();
+            int colorIndex = 0;
+            
+            for (SensorData.SensorItem item : items) {
+                View itemView = createDataItemView(
+                        item.getKey(),
+                        item.getValue(),
+                        item.getUnit(),
+                        SENSOR_COLORS[colorIndex % SENSOR_COLORS.length]
+                );
+                
+                GridLayout.LayoutParams params = new GridLayout.LayoutParams();
+                params.width = 0;
+                params.height = GridLayout.LayoutParams.WRAP_CONTENT;
+                params.columnSpec = GridLayout.spec(GridLayout.UNDEFINED, 1f);
+                params.setMargins(dpToPx(4), dpToPx(4), dpToPx(4), dpToPx(4));
+                
+                gridData.addView(itemView, params);
+                colorIndex++;
+            }
             
             // 点击事件
-            itemView.setOnClickListener(v -> {
+            this.itemView.setOnClickListener(v -> {
                 if (listener != null) {
                     listener.onItemClick(data, position);
                 }
             });
             
-            itemView.setOnLongClickListener(v -> {
+            this.itemView.setOnLongClickListener(v -> {
                 if (listener != null) {
                     listener.onItemLongClick(data, position);
                     return true;
                 }
                 return false;
             });
+        }
+        
+        private View createDataItemView(String name, String value, String unit, int valueColor) {
+            LinearLayout layout = new LinearLayout(itemView.getContext());
+            layout.setOrientation(LinearLayout.VERTICAL);
+            layout.setGravity(android.view.Gravity.CENTER);
+            layout.setPadding(dpToPx(4), dpToPx(4), dpToPx(4), dpToPx(4));
+            
+            // 名称
+            TextView tvName = new TextView(itemView.getContext());
+            tvName.setText(name);
+            tvName.setTextSize(TypedValue.COMPLEX_UNIT_SP, 10);
+            tvName.setTextColor(itemView.getContext().getResources().getColor(R.color.text_secondary, null));
+            layout.addView(tvName);
+            
+            // 值
+            TextView tvValue = new TextView(itemView.getContext());
+            String displayValue = value + (unit != null && !unit.isEmpty() ? " " + unit : "");
+            tvValue.setText(displayValue);
+            tvValue.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
+            tvValue.setTextColor(valueColor);
+            tvValue.setTypeface(null, android.graphics.Typeface.BOLD);
+            layout.addView(tvValue);
+            
+            return layout;
+        }
+        
+        private int dpToPx(int dp) {
+            return (int) TypedValue.applyDimension(
+                    TypedValue.COMPLEX_UNIT_DIP,
+                    dp,
+                    itemView.getResources().getDisplayMetrics()
+            );
         }
     }
 }

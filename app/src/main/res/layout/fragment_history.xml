@@ -22,81 +22,19 @@
 
     </androidx.cardview.widget.CardView>
 
-    <!-- 图表切换按钮 -->
+    <!-- 动态图表筛选按钮容器 -->
     <HorizontalScrollView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:scrollbars="none">
 
         <LinearLayout
+            android:id="@+id/layout_filter_buttons"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
-            android:paddingHorizontal="8dp">
+            android:paddingHorizontal="8dp" />
 
-            <Button
-                android:id="@+id/btn_show_all"
-                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
-                android:layout_width="wrap_content"
-                android:layout_height="36dp"
-                android:layout_marginEnd="4dp"
-                android:text="全部"
-                android:textSize="12sp" />
-
-            <Button
-                android:id="@+id/btn_show_temp"
-                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
-                android:layout_width="wrap_content"
-                android:layout_height="36dp"
-                android:layout_marginEnd="4dp"
-                android:text="温度"
-                android:textSize="12sp" />
-
-            <Button
-                android:id="@+id/btn_show_hum"
-                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
-                android:layout_width="wrap_content"
-                android:layout_height="36dp"
-                android:layout_marginEnd="4dp"
-                android:text="湿度"
-                android:textSize="12sp" />
-
-            <Button
-                android:id="@+id/btn_show_light"
-                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
-                android:layout_width="wrap_content"
-                android:layout_height="36dp"
-                android:layout_marginEnd="4dp"
-                android:text="光照"
-                android:textSize="12sp" />
-
-            <Button
-                android:id="@+id/btn_show_water"
-                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
-                android:layout_width="wrap_content"
-                android:layout_height="36dp"
-                android:layout_marginEnd="4dp"
-                android:text="水分"
-                android:textSize="12sp" />
-
-            <Button
-                android:id="@+id/btn_show_co2"
-                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
-                android:layout_width="wrap_content"
-                android:layout_height="36dp"
-                android:layout_marginEnd="4dp"
-                android:text="CO2"
-                android:textSize="12sp" />
-
-            <Button
-                android:id="@+id/btn_show_ph"
-                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
-                android:layout_width="wrap_content"
-                android:layout_height="36dp"
-                android:text="PH"
-                android:textSize="12sp" />
-
-        </LinearLayout>
     </HorizontalScrollView>
 
     <!-- 操作按钮和统计 -->

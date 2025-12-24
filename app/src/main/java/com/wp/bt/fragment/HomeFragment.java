@@ -1,9 +1,14 @@
 package com.wp.bt.fragment;
 
+import android.graphics.Color;
 import android.os.Bundle;
+import android.util.TypedValue;
+import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.GridLayout;
+import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -20,15 +25,16 @@ import com.wp.bt.model.SensorData;
 import com.wp.bt.model.ThresholdData;
 import com.wp.bt.model.ThresholdItem;
 
+import java.util.List;
+
 /**
- * 主页Fragment
- * 显示实时传感器数据和阈值控制
+ * 主页Fragment - 通用版本
+ * 动态显示任意数量和名称的传感器数据
  */
 public class HomeFragment extends Fragment {
     
-    // 传感器数据显示控件
-    private TextView tvTemp, tvHum, tvLight, tvWater, tvCo2, tvPh;
-    private TextView tvTempUnit, tvHumUnit, tvLightUnit, tvWaterUnit, tvCo2Unit, tvPhUnit;
+    // 动态传感器数据容器
+    private GridLayout gridSensorData;
     
     // 阈值控制
     private RecyclerView rvThreshold;
@@ -40,6 +46,20 @@ public class HomeFragment extends Fragment {
     
     // 阈值变化回调
     private OnThresholdChangeListener thresholdChangeListener;
+    
+    // 颜色数组，用于不同传感器项
+    private static final int[] SENSOR_COLORS = {
+            Color.parseColor("#FF5722"), // 橙红
+            Color.parseColor("#2196F3"), // 蓝色
+            Color.parseColor("#FFC107"), // 黄色
+            Color.parseColor("#00BCD4"), // 青色
+            Color.parseColor("#9C27B0"), // 紫色
+            Color.parseColor("#4CAF50"), // 绿色
+            Color.parseColor("#E91E63"), // 粉色
+            Color.parseColor("#3F51B5"), // 靛蓝
+            Color.parseColor("#009688"), // 蓝绿
+            Color.parseColor("#795548"), // 棕色
+    };
     
     /**
      * 阈值变化监听器接口
@@ -74,20 +94,8 @@ public class HomeFragment extends Fragment {
         tvConnectionStatus = view.findViewById(R.id.tv_connection_status);
         cardConnectionStatus = view.findViewById(R.id.card_connection_status);
         
-        // 传感器数据显示
-        tvTemp = view.findViewById(R.id.tv_temp_value);
-        tvHum = view.findViewById(R.id.tv_hum_value);
-        tvLight = view.findViewById(R.id.tv_light_value);
-        tvWater = view.findViewById(R.id.tv_water_value);
-        tvCo2 = view.findViewById(R.id.tv_co2_value);
-        tvPh = view.findViewById(R.id.tv_ph_value);
-        
-        tvTempUnit = view.findViewById(R.id.tv_temp_unit);
-        tvHumUnit = view.findViewById(R.id.tv_hum_unit);
-        tvLightUnit = view.findViewById(R.id.tv_light_unit);
-        tvWaterUnit = view.findViewById(R.id.tv_water_unit);
-        tvCo2Unit = view.findViewById(R.id.tv_co2_unit);
-        tvPhUnit = view.findViewById(R.id.tv_ph_unit);
+        // 动态传感器数据容器
+        gridSensorData = view.findViewById(R.id.grid_sensor_data);
         
         // 阈值控制列表
         rvThreshold = view.findViewById(R.id.rv_threshold);
@@ -128,48 +136,111 @@ public class HomeFragment extends Fragment {
     }
     
     /**
-     * 更新传感器数据显示
+     * 更新传感器数据显示 - 动态版本
+     * 根据数据项动态创建显示卡片
      */
     public void updateSensorData(SensorData data) {
         if (getActivity() == null || data == null) return;
         
         getActivity().runOnUiThread(() -> {
-            // 温度
-            tvTemp.setText(String.format("%.1f", data.getTemperature()));
-            if (data.getTempUnit() != null) {
-                tvTempUnit.setText("°" + data.getTempUnit());
-            }
+            // 清空现有视图
+            gridSensorData.removeAllViews();
             
-            // 湿度
-            tvHum.setText(String.format("%.1f", data.getHumidity()));
-            if (data.getHumUnit() != null) {
-                tvHumUnit.setText(data.getHumUnit());
-            }
+            List<SensorData.SensorItem> items = data.getItemList();
+            int colorIndex = 0;
             
-            // 光照
-            tvLight.setText(String.format("%.1f", data.getLight()));
-            if (data.getLightUnit() != null) {
-                tvLightUnit.setText(data.getLightUnit());
-            }
-            
-            // 水分
-            tvWater.setText(String.format("%.1f", data.getWater()));
-            if (data.getWaterUnit() != null) {
-                tvWaterUnit.setText(data.getWaterUnit());
-            }
-            
-            // CO2
-            tvCo2.setText(String.format("%.0f", data.getCo2()));
-            if (data.getCo2Unit() != null) {
-                tvCo2Unit.setText(data.getCo2Unit());
-            }
-            
-            // PH
-            tvPh.setText(String.format("%.1f", data.getPh()));
-            if (data.getPhUnit() != null) {
-                tvPhUnit.setText(data.getPhUnit());
+            for (SensorData.SensorItem item : items) {
+                // 创建卡片
+                CardView card = createSensorCard(
+                        item.getKey(),
+                        item.getValue(),
+                        item.getUnit(),
+                        SENSOR_COLORS[colorIndex % SENSOR_COLORS.length]
+                );
+                
+                // 设置GridLayout参数
+                GridLayout.LayoutParams params = new GridLayout.LayoutParams();
+                params.width = 0;
+                params.height = GridLayout.LayoutParams.WRAP_CONTENT;
+                params.columnSpec = GridLayout.spec(GridLayout.UNDEFINED, 1f);
+                params.setMargins(dpToPx(4), dpToPx(4), dpToPx(4), dpToPx(4));
+                
+                gridSensorData.addView(card, params);
+                colorIndex++;
             }
         });
+    }
+    
+    /**
+     * 创建传感器数据卡片
+     */
+    private CardView createSensorCard(String name, String value, String unit, int valueColor) {
+        // 创建CardView
+        CardView cardView = new CardView(requireContext());
+        cardView.setRadius(dpToPx(8));
+        cardView.setCardElevation(dpToPx(2));
+        cardView.setContentPadding(dpToPx(16), dpToPx(16), dpToPx(16), dpToPx(16));
+        cardView.setCardBackgroundColor(Color.WHITE);
+        
+        // 创建内容布局
+        LinearLayout layout = new LinearLayout(requireContext());
+        layout.setOrientation(LinearLayout.VERTICAL);
+        
+        // 名称
+        TextView tvName = new TextView(requireContext());
+        tvName.setText(name);
+        tvName.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
+        tvName.setTextColor(getResources().getColor(R.color.text_secondary, null));
+        layout.addView(tvName);
+        
+        // 值和单位的水平布局
+        LinearLayout valueLayout = new LinearLayout(requireContext());
+        valueLayout.setOrientation(LinearLayout.HORIZONTAL);
+        valueLayout.setGravity(Gravity.BOTTOM);
+        LinearLayout.LayoutParams valueLayoutParams = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+        );
+        valueLayoutParams.topMargin = dpToPx(8);
+        
+        // 值
+        TextView tvValue = new TextView(requireContext());
+        tvValue.setText(value);
+        tvValue.setTextSize(TypedValue.COMPLEX_UNIT_SP, 28);
+        tvValue.setTextColor(valueColor);
+        tvValue.setTypeface(null, android.graphics.Typeface.BOLD);
+        valueLayout.addView(tvValue);
+        
+        // 单位
+        if (unit != null && !unit.isEmpty()) {
+            TextView tvUnit = new TextView(requireContext());
+            tvUnit.setText(" " + unit);
+            tvUnit.setTextSize(TypedValue.COMPLEX_UNIT_SP, 16);
+            tvUnit.setTextColor(getResources().getColor(R.color.text_secondary, null));
+            LinearLayout.LayoutParams unitParams = new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+            );
+            unitParams.bottomMargin = dpToPx(4);
+            tvUnit.setLayoutParams(unitParams);
+            valueLayout.addView(tvUnit);
+        }
+        
+        layout.addView(valueLayout, valueLayoutParams);
+        cardView.addView(layout);
+        
+        return cardView;
+    }
+    
+    /**
+     * dp转px
+     */
+    private int dpToPx(int dp) {
+        return (int) TypedValue.applyDimension(
+                TypedValue.COMPLEX_UNIT_DIP,
+                dp,
+                getResources().getDisplayMetrics()
+        );
     }
     
     /**
